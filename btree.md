@@ -1,0 +1,60 @@
+B+ Tree is a blanced n-ary tree. Every path from the root to any of the leaf noeds is of the same length. In these kind of trees every non-leaf node except the root node will have between ceil(n/2) and n children - n-1 being the maximun number of keys a node can accommodate - the roote node can have between 2 and n children.
+
+## Structure of a B+ Tree
+A node in a B+ Tree can have upto *n* pointers pointing to *n* children and that node can contain upto *n-1* keys.
+![B+ Tree Node Structure](<B+ Tree Node Structure.png>)
+
+Generally for the leaf nodes the pointers would either point to the page on disk or it'd directly contain the data that the key would be pointing to.
+Each node is allowed to have between **ceil((n-1)/2) and n-1 keys**, n being the maximum children/pointers a node can have. **NOTE: The value of N is constance for a B+ Tree.**
+
+Invariants:
+- For two keys K<sub>i</sub> and K<sub>j</sub>, and i < j then K<sub>i</sub> < K<sub>j</sub>. There is no equals contraint for a reason, you can have duplicates if you want but that's not realy suggested as it can lead to duplicate keys in the internal nodes making insertions and deletions more complicated.
+- For two leaf-nodes L<sub>i</sub> and L<sub>j</sub>, and i < j, then every search key value v<sub>i</sub> in L<sub>i</sub> is less than every search key value v<sub>j</sub> in L<sub>j</sub>.
+- The above goes for branch nodes as well.
+- Unlike leaf nodes that contain data or pointers to the required data, non-leaf nodes point to other tree nodes. They act like a sparse index on top of the leaf nodes.
+- A non-leaf node may hold upto n pointers and always hold at least ceil(n/2) pointers.
+- For a non-leaf node with m pointers (where m <= n):
+  - For 2 <= i <= m - 1, the pointer P<sub>i</sub> points to the subtree that contains key values less than K<sub>i</sub> and greater than equal to K<sub>i-1</sub>.
+  - P<sub>1</sub> points to the subtree that contains values less than K<sub>1</sub>.
+  - P<sub>m</sub> points to the subtree that contains values greater than K<sub>m-1</sub>.
+- The root node can have fewer than ceil((n-1)/2) pointers. It however must at least have two pointers or none at all i.e. it will have at least two children or the root node will be the only node in the tree at that time. It cannot have one pointer.
+
+## Querying a B+ Tree
+A function that wants to query anything from the B+ Tree would generally start from the root node and travel downwards until it finds what its looking for in one of the leaf nodes, or end the query if the requested data was not present in any of the leaf nodes.
+
+How the query works, say it's a point query for finding the value v:
+- The function starts at the root node, and searches for a key such that K<sub>i</sub> >= v. 
+  - If such a key is found: 
+    - And K = v, then we move to the node pointed to by P<sub>i+1</sub>, this is because the pointers to the left of the key point to a subtree that has values strictly less than the succeeding key.
+    - And K > v, then we move to the node pointed to by P<sub>i</sub>
+  - If such a key was not found that means the value is greater than the largest key present in the root node, so we move to the node pointed to by P<sub>m</sub>, i.e. the rightmost child of the root.
+- The above process repeats until you reach a leaf node. Then depending on if the leaf node contains the value v, we return the index/data of the node or return a failure indicating that the value was not found in the tree.
+
+The pseudocode would look something like this
+```py
+function find(v):
+    # Assuming no duplicate keys exist of course.
+    let cur_node = root_node
+    while (cur_node != leaf_node)
+      let key_index = smallest key such that K<sub>i</sub> >= v
+      if key_index exists:
+        if keys[key_index] == v:
+          cur_node = child[key_index + 1]
+        else
+          cur_node = child[key_index]
+      else:
+        # Key does not exist so we go the last node
+        cur_node = child[last_pointer_index]
+        
+    # Now we've reached a leaf node
+    if (for some i, key[i] == v):
+      return value[i] or pointer[i]
+    else:
+      return null
+```
+
+For range queries, looking like v ∈ [lb, ub]; lb = lower_bound and ub = upper_bound:
+- The serach will look similar to point query. The search will be for lb.
+- The additional process will be that we don't terminate the search if lb was not found. We traverse all keys in the leaf node we reached and it's right side siblings till we reach a key such that the value of that key is greater than to the ub. We collect all the pointers in between this traversal.
+
+The pseudocode for this is just adding some scanning at the end of the previous one. I'll not write that down.:shrug:
