@@ -32,7 +32,7 @@ How the query works, say it's a point query for finding the value v:
 
 The pseudocode would look something like this
 ```py
-function find(v):
+def find(v):
     # Assuming no duplicate keys exist of course.
     let cur_node = root_node
     while (cur_node != leaf_node)
@@ -58,3 +58,67 @@ For range queries, looking like v ∈ [lb, ub]; lb = lower_bound and ub = upper_
 - The additional process will be that we don't terminate the search if lb was not found. We traverse all keys in the leaf node we reached and it's right side siblings till we reach a key such that the value of that key is greater than to the ub. We collect all the pointers in between this traversal.
 
 The pseudocode for this is just adding some scanning at the end of the previous one. I'll not write that down.:shrug:
+
+
+## Updating B+ Trees
+### Insertion
+We'd use the find functionality to get to the leaf node where the value to be inserted should be present. Then we insert the value in the node, preserving the ordering.
+If the node was full we'd need to split the node in two to accommodate the new value.
+
+The alogrithm dictates that when a node splits one key is added to the parent, and if that parent was full, we'd have to split the parent as well. This process can cascade all the way up to the root node (the root node can also split, when that happens, the depth of the tree is increased).
+
+When a non-leaf node splits
+- Both the keys as well as child pointers are split between nodes.
+- If the max key capacity was n, then ceil(n/2) keys remain with the left-most node, 1 key is moved to the parent and the remaining keys move to the newly created node. The pointers associated with the node that moved to the parent still remain on the same level, they are just distributed among the nodes.
+
+Pseudocode:
+```py
+def insert(key K):
+    if (tree_empty):
+        create leaf node with key
+        set created node as root
+    else
+        L = find leaf node where K should be inserted
+        
+    if (L.Keys.length < n - 1):
+        insert_key_in_leaf(L, K, P)
+    else:
+        L2 = new_node()
+        ## Assuming a linked list like structure for leaf nodes the last pointer points to their right sibling.
+        L2.pointer[n-1] = L1.pointer[n - 1]
+        L1.pointer[n-1] = L2
+        Keep the first ceil(n/2) keys in L
+        Move the remaining keys (starting at index ceil(n/2) + 1) to L2
+        # K1 is the smallest key in the newly formed node.
+        # Since the parent needs to know the left and right child of the newly formed node we pass L and L2 along to the function
+        insert_key_in_parent(L, K1, L2)
+        
+def insert_key_in_leaf(Node L, Key K, Pointer P):
+    if K < K1:
+        Insert K at position 1 and shift all other keys by one.
+    else:
+        Insert P, K into L after the key Ki such that Ki <= K
+        
+def insert_key_in_parent(Node N, Key K, Node N2):
+    if (N == root):
+        R = new_node();
+        R has only one key and two pointers: pointer to N, Key K, pointer to N2
+        set_root(RA)
+    else:
+        if (p.pointers.len < n):
+            P = parent_of(N)
+            # Insert into the parent a key just after N
+            insert_key_to_node(index of N, K, N2);
+        else:
+            # Since it's overflowing we'll need to copy the contents of P along with K, N2 to some temporary space.
+            T = copy_node_with_capacity(P, n + 1)
+            Insert (K, N2) just after N in T
+            # Order of keys could've changed after insertions so delete all entries from P and move entreis from T
+            Remove all entries from P
+            Move T.P1...T.P(ceil((n+1)/2)) to P
+            # The key between T.P(ceil((n+1)/2))
+            K_new = T.Key[ceil((n+1)/2)]
+            P2 = new_node()
+            Move 
+            insert_key_in_parent(P, K_new, P2)
+```
