@@ -1,16 +1,12 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <variant>
 
 // Forward declarations
+template <typename KeyType, std::size_t N> class BTreeNode;
 template <typename KeyType, std::size_t N> class BTreeInternalNode;
 template <typename KeyType, std::size_t N> class BTreeLeafNode;
 template <typename KeyData, std::size_t N> class BTree;
-
-// Tagged union for BTree nodes - can be either internal or leaf nodes
-template <typename KeyType, std::size_t N>
-using BTreeNode = std::variant<BTreeInternalNode<KeyType, N>, BTreeLeafNode<KeyType, N>>;
 
 enum class BTreeNodeType { RootNode, BranchNode, LeafNode };
 
@@ -52,6 +48,19 @@ private:
   uint8_t data[PAGE_SIZE];
 };
 
+// Abstract base class for BTree nodes
+template <typename KeyType, std::size_t N> class BTreeNode {
+public:
+  BTreeNodeType type;
+  std::size_t numKeys;
+
+  BTreeNode(BTreeNodeType nodeType) : type(nodeType), numKeys(0) {}
+  virtual ~BTreeNode() = default;
+
+  virtual bool isFull() const = 0;
+  virtual bool isLeaf() const = 0;
+};
+
 // BTree, can't think of anything other than the root node that would need to be here.
 template <typename KeyType, std::size_t N> class BTree {
   BTreeNode<KeyType, N>* root;
@@ -59,9 +68,9 @@ template <typename KeyType, std::size_t N> class BTree {
 
 // Internal node can be root or branch, contains pointers to child nodes.
 // Keys are of type KeyType, and a max capacity of N pointers.
-template <typename KeyType, std::size_t N> class BTreeInternalNode {
+template <typename KeyType, std::size_t N> class BTreeInternalNode : public BTreeNode<KeyType, N> {
 public:
-  BTreeInternalNode() : type(BTreeNodeType::BranchNode), numKeys(0) {
+  BTreeInternalNode() : BTreeNode<KeyType, N>(BTreeNodeType::BranchNode) {
     for (std::size_t i = 0; i < N; ++i) {
       children[i] = nullptr;
     }
@@ -69,26 +78,28 @@ public:
 
   BTreeNode<KeyType, N>* children[N];
   KeyType keys[N - 1];
-  std::size_t numKeys;
-  BTreeNodeType type;
+
+  bool isFull() const override { return this->numKeys >= (N - 1); }
+  bool isLeaf() const override { return false; }
 
   int insert_key(KeyType key, BTreeNode<KeyType, N>* node);
 };
 
 // Leaf node, contains key-pointer pairs pointing to PageData, and pointers to their right sibling.
-template <typename KeyType, std::size_t N> class BTreeLeafNode {
+template <typename KeyType, std::size_t N> class BTreeLeafNode : public BTreeNode<KeyType, N> {
 public:
   KeyType keys[N - 1];
   PageData* dataPointers[N - 1];
-  std::size_t cur_size;
   BTreeLeafNode<KeyType, N>* right_sibling;
-  static constexpr BTreeNodeType type = BTreeNodeType::LeafNode;
 
-  BTreeLeafNode() : cur_size(0), right_sibling(nullptr) {
+  BTreeLeafNode() : BTreeNode<KeyType, N>(BTreeNodeType::LeafNode), right_sibling(nullptr) {
     for (std::size_t i = 0; i < N - 1; ++i) {
       dataPointers[i] = nullptr;
     }
   }
+
+  bool isFull() const override { return this->numKeys >= (N - 1); }
+  bool isLeaf() const override { return true; }
 
   int insert_key(KeyType key, PageData* page);
 };
@@ -96,19 +107,19 @@ public:
 // I'll have to think more on the return types and the API contract for this one maybe
 template <typename KeyType, std::size_t N> int BTreeLeafNode<KeyType, N>::insert_key(KeyType key, PageData* page) {
   // If it's full we need a split so we return -1
-  if (cur_size >= (N - 1)) {
+  if (this->numKeys >= (N - 1)) {
     return -1;
   }
 
   // We don't want duplicates
-  const InsertPosition pos = find_index_greater_than_or_equal(keys, cur_size, key);
+  const InsertPosition pos = find_index_greater_than_or_equal(keys, this->numKeys, key);
   // TODO: We need something better maybe?
   if (pos.is_duplicate) {
     return -1;
   }
 
   // Shift keys and pointers by 1 to make room for the new key
-  for (std::size_t i = cur_size; i > pos.index; --i) {
+  for (std::size_t i = this->numKeys; i > pos.index; --i) {
     keys[i] = keys[i - 1];
     dataPointers[i] = dataPointers[i - 1];
   }
@@ -116,7 +127,7 @@ template <typename KeyType, std::size_t N> int BTreeLeafNode<KeyType, N>::insert
   // Now since I've made space for the key, time to insert it.
   keys[pos.index] = key;
   dataPointers[pos.index] = page;
-  cur_size++;
+  this->numKeys++;
 
   return 0;
 }
