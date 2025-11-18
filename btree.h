@@ -1,19 +1,9 @@
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
+#ifndef BTREE_H
+#define BTREE_H
 
-// Forward declarations
-template <typename KeyType, std::size_t N> class BTreeNode;
-template <typename KeyType, std::size_t N> class BTreeInternalNode;
-template <typename KeyType, std::size_t N> class BTreeLeafNode;
-template <typename KeyData, std::size_t N> class BTree;
-
-enum class BTreeNodeType { RootNode, BranchNode, LeafNode };
-
-struct InsertPosition {
-  size_t index;
-  bool is_duplicate;
-};
+#include "btree_fwd.h"
+#include "btree_internal_node.h"
+#include "btree_leaf_node.h"
 
 /*
  * What do I want as an API in the BTree?
@@ -31,114 +21,48 @@ struct InsertPosition {
  *  traversing the tree? Maybe a stack that keeps track of all the pointers/nodes I've traversed.
  */
 
-// 4KB page data block, that the leaf_nodes points to.
-class PageData {
-public:
-  static constexpr std::size_t PAGE_SIZE = 4096;
-  PageData() : data{} {}
-
-  // Rust taught me this :shrug:, mutable and immutable references.
-  uint8_t* getData() { return data; }
-  const uint8_t* getData() const { return data; }
-  uint8_t& operator[](std::size_t index) { return data[index]; }
-  const uint8_t& operator[](std::size_t index) const { return data[index]; }
-  std::size_t size() const { return PAGE_SIZE; }
-
-private:
-  uint8_t data[PAGE_SIZE];
-};
-
-// Abstract base class for BTree nodes
-template <typename KeyType, std::size_t N> class BTreeNode {
-public:
-  BTreeNodeType type;
-  std::size_t numKeys;
-
-  BTreeNode(BTreeNodeType nodeType) : type(nodeType), numKeys(0) {}
-  virtual ~BTreeNode() = default;
-
-  virtual bool isFull() const = 0;
-  virtual bool isLeaf() const = 0;
-};
-
 // BTree, can't think of anything other than the root node that would need to be here.
 template <typename KeyType, std::size_t N> class BTree {
   BTreeNode<KeyType, N>* root;
+
+  BTreeLeafNode<KeyType, N>* find(KeyType keyA) const;
 };
 
-// Internal node can be root or branch, contains pointers to child nodes.
-// Keys are of type KeyType, and a max capacity of N pointers.
-template <typename KeyType, std::size_t N> class BTreeInternalNode : public BTreeNode<KeyType, N> {
-public:
-  BTreeInternalNode() : BTreeNode<KeyType, N>(BTreeNodeType::BranchNode) {
-    for (std::size_t i = 0; i < N; ++i) {
-      children[i] = nullptr;
-    }
+// TODO: To keep track of parents of the nodes I'll likely need to keep the pointers in a stack when finding and return
+// them, right?
+// Find and returns the pointer to the leaf node containing given key. Returns null pointer if key is not found.
+template <typename KeyType, std::size_t N> BTreeLeafNode<KeyType, N>* BTree<KeyType, N>::find(KeyType key) const {
+  if (root == nullptr) {
+    return nullptr;
   }
 
-  BTreeNode<KeyType, N>* children[N];
-  KeyType keys[N - 1];
-
-  bool isFull() const override { return this->numKeys >= (N - 1); }
-  bool isLeaf() const override { return false; }
-
-  int insert_key(KeyType key, BTreeNode<KeyType, N>* node);
-};
-
-// Leaf node, contains key-pointer pairs pointing to PageData, and pointers to their right sibling.
-template <typename KeyType, std::size_t N> class BTreeLeafNode : public BTreeNode<KeyType, N> {
-public:
-  KeyType keys[N - 1];
-  PageData* dataPointers[N - 1];
-  BTreeLeafNode<KeyType, N>* right_sibling;
-
-  BTreeLeafNode() : BTreeNode<KeyType, N>(BTreeNodeType::LeafNode), right_sibling(nullptr) {
-    for (std::size_t i = 0; i < N - 1; ++i) {
-      dataPointers[i] = nullptr;
-    }
+  BTreeNode<KeyType, N>* cur = root;
+  // I need to iterate over nodes util I reach a leaf node. Right.
+  while (!cur->isLeaf()) {
+    // Get the first key index that is greater than the key we're looking for, since there are going to be no duplicates
+    // we don't need to worry about equals param.
+    // The one we find will be the pointer we follow. For instance consider a capacity of 5 pointers, 4 keys. With a
+    // node looking like this:
+    // . 4 . 18 . 30 . 50 .     (. represents a pointer)
+    //
+    // We need to find a pointer that would lead us to a leaf containing the value 20. It would fall b/w 18 and 30, idx
+    // of 30 is 2, so would be the idx of the desired pointer.
+    //
+    // Now consider the case where its greater than the  greatest/last key, then we'd get idx = 4 which is once again
+    // correct.
+    //
+    // If the first element itself is greater than the key then we know it should be the first pointer and that's what
+    // upper_bound will return so thats once again correct.
+    auto* internalNode = static_cast<BTreeInternalNode<KeyType, N>*>(cur);
+    std::size_t next_pointer_idx =
+        std::upper_bound(internalNode->keys, internalNode->keys + internalNode->numKeys, key) - internalNode->keys;
+    cur = internalNode->children[next_pointer_idx];
   }
 
-  bool isFull() const override { return this->numKeys >= (N - 1); }
-  bool isLeaf() const override { return true; }
-
-  int insert_key(KeyType key, PageData* page);
-};
-
-// I'll have to think more on the return types and the API contract for this one maybe
-template <typename KeyType, std::size_t N> int BTreeLeafNode<KeyType, N>::insert_key(KeyType key, PageData* page) {
-  // If it's full we need a split so we return -1
-  if (this->numKeys >= (N - 1)) {
-    return -1;
-  }
-
-  // We don't want duplicates
-  const InsertPosition pos = find_index_greater_than_or_equal(keys, this->numKeys, key);
-  // TODO: We need something better maybe?
-  if (pos.is_duplicate) {
-    return -1;
-  }
-
-  // Shift keys and pointers by 1 to make room for the new key
-  for (std::size_t i = this->numKeys; i > pos.index; --i) {
-    keys[i] = keys[i - 1];
-    dataPointers[i] = dataPointers[i - 1];
-  }
-
-  // Now since I've made space for the key, time to insert it.
-  keys[pos.index] = key;
-  dataPointers[pos.index] = page;
-  this->numKeys++;
-
-  return 0;
+  auto* leafNode = static_cast<BTreeLeafNode<KeyType, N>*>(cur);
+  std::size_t key_idx = std::find(leafNode->keys, leafNode->keys + cur->numKeys, key) - leafNode->keys;
+  // If the index was equal to the current size then we didn't find the key, so we return nullptr.
+  return key_idx == cur->numKeys ? nullptr : leafNode;
 }
 
-template <typename DataType>
-InsertPosition find_index_greater_than_or_equal(const DataType array[], size_t cur_size, DataType value) {
-  const DataType* end = array + cur_size;
-  const DataType* pointer = std::lower_bound(array, end, value);
-
-  size_t index = pointer - array; // Works even if pointer == end
-  bool is_duplicate = (pointer != end && *pointer == value);
-
-  return {index, is_duplicate};
-}
+#endif
