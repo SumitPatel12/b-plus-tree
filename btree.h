@@ -71,22 +71,24 @@ public:
   KeyType keys[N - 1];
   std::size_t numKeys;
   BTreeNodeType type;
+
+  int insert_key(KeyType key, BTreeNode<KeyType, N>* node);
 };
 
 // Leaf node, contains key-pointer pairs pointing to PageData, and pointers to their right sibling.
 template <typename KeyType, std::size_t N> class BTreeLeafNode {
 public:
-  BTreeLeafNode() : cur_size(0), right_sibling(nullptr) {
-    for (std::size_t i = 0; i < N - 1; ++i) {
-      dataPointers[i] = nullptr;
-    }
-  }
-
   KeyType keys[N - 1];
   PageData* dataPointers[N - 1];
   std::size_t cur_size;
   BTreeLeafNode<KeyType, N>* right_sibling;
   static constexpr BTreeNodeType type = BTreeNodeType::LeafNode;
+
+  BTreeLeafNode() : cur_size(0), right_sibling(nullptr) {
+    for (std::size_t i = 0; i < N - 1; ++i) {
+      dataPointers[i] = nullptr;
+    }
+  }
 
   int insert_key(KeyType key, PageData* page);
 };
