@@ -9,8 +9,8 @@
 void test_insert_empty_tree() {
     std::cout << "Testing insert into empty tree..." << std::endl;
     BTree<int, 3> tree; // Small N for easy testing
-    int result = tree.insert(10, nullptr);
-    assert(result == 0);
+    InsertResult result = tree.insert(10, nullptr);
+    assert(result == InsertResult::Success);
     
     auto* leaf = tree.find(10);
     assert(leaf != nullptr);
@@ -40,9 +40,9 @@ void test_node_full() {
     tree.insert(10, nullptr);
     tree.insert(20, nullptr);
     
-    // Third insert should fail (return -1) because split is not implemented
-    int result = tree.insert(30, nullptr);
-    assert(result == -1);
+    // Third insert should fail (return Full) because split is not implemented
+    InsertResult result = tree.insert(30, nullptr);
+    assert(result == InsertResult::Full);
     std::cout << "Passed!" << std::endl;
 }
 

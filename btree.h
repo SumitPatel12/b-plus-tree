@@ -29,7 +29,7 @@ public:
   BTree() : root(nullptr) {}
 
   BTreeLeafNode<KeyType, N>* find(KeyType key) const;
-  int insert(KeyType key, PageData* data);
+  InsertResult insert(KeyType key, PageData* data);
 
 private:
   BTreeLeafNode<KeyType, N>* find_leaf_for_key(KeyType key) const;
@@ -89,19 +89,23 @@ BTreeLeafNode<KeyType, N>* BTree<KeyType, N>::find_leaf_for_key(KeyType key) con
   return static_cast<BTreeLeafNode<KeyType, N>*>(cur);
 }
 
-template <typename KeyType, std::size_t N> int BTree<KeyType, N>::insert(KeyType key, PageData* data) {
+template <typename KeyType, std::size_t N> InsertResult BTree<KeyType, N>::insert(KeyType key, PageData* data) {
   if (root == nullptr) {
     root = new BTreeLeafNode<KeyType, N>();
   }
 
   BTreeLeafNode<KeyType, N>* leaf = find_leaf_for_key(key);
-  int result = leaf->insert_key(key, data);
-
-  if (result == -1) {
-    // TODO: Handle split
+  if (!leaf->isFull()) {
+    InsertResult result = leaf->insert_key(key, data);
+    // TOOD: Handle failure scenarios.
+    return result;
+  } else {
+    return InsertResult::Full;
   }
 
-  return result;
+  // TODO: Handle split.
+
+  return InsertResult::Success;
 }
 
 #endif

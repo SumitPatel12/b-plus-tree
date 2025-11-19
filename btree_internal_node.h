@@ -19,20 +19,20 @@ public:
   bool isFull() const override { return this->numKeys >= (N - 1); }
   bool isLeaf() const override { return false; }
 
-  int insert_key(KeyType key, BTreeNode<KeyType, N>* node);
+  InsertResult insert_key(KeyType key, BTreeNode<KeyType, N>* node);
 };
 
 // Key is inserted with a pointer, we go with index i for key, and i + 1 for the pointer. Likely will populate the first
 // pointer when creating the node or something. Not sure right now.
 template <typename KeyType, std::size_t N>
-int BTreeInternalNode<KeyType, N>::insert_key(KeyType key, BTreeNode<KeyType, N>* node) {
+InsertResult BTreeInternalNode<KeyType, N>::insert_key(KeyType key, BTreeNode<KeyType, N>* node) {
   if (this->numKeys >= (N - 1)) {
-    return -1;
+    return InsertResult::Full;
   }
 
   const InsertPosition pos = find_index_greater_than_or_equal(keys, this->numKeys, key);
   if (pos.is_duplicate) {
-    return -1;
+    return InsertResult::Duplicate;
   }
 
   for (std::size_t i = this->numKeys; i > pos.index; --i) {
@@ -44,7 +44,7 @@ int BTreeInternalNode<KeyType, N>::insert_key(KeyType key, BTreeNode<KeyType, N>
   children[pos.index + 1] = node;
   this->numKeys++;
 
-  return 0;
+  return InsertResult::Success;
 }
 
 #endif

@@ -13,6 +13,8 @@ template <typename KeyData, std::size_t N> class BTree;
 
 enum class BTreeNodeType { RootNode, BranchNode, LeafNode };
 
+enum class InsertResult { Success, Duplicate, Full };
+
 struct InsertPosition {
   size_t index;
   bool is_duplicate;
