@@ -25,7 +25,14 @@
 template <typename KeyType, std::size_t N> class BTree {
   BTreeNode<KeyType, N>* root;
 
-  BTreeLeafNode<KeyType, N>* find(KeyType keyA) const;
+public:
+  BTree() : root(nullptr) {}
+
+  BTreeLeafNode<KeyType, N>* find(KeyType key) const;
+  int insert(KeyType key, PageData* data);
+
+private:
+  BTreeLeafNode<KeyType, N>* find_leaf_for_key(KeyType key) const;
 };
 
 // TODO: To keep track of parents of the nodes I'll likely need to keep the pointers in a stack when finding and return
@@ -63,6 +70,38 @@ template <typename KeyType, std::size_t N> BTreeLeafNode<KeyType, N>* BTree<KeyT
   std::size_t key_idx = std::find(leafNode->keys, leafNode->keys + cur->numKeys, key) - leafNode->keys;
   // If the index was equal to the current size then we didn't find the key, so we return nullptr.
   return key_idx == cur->numKeys ? nullptr : leafNode;
+}
+
+template <typename KeyType, std::size_t N>
+BTreeLeafNode<KeyType, N>* BTree<KeyType, N>::find_leaf_for_key(KeyType key) const {
+  if (root == nullptr) {
+    return nullptr;
+  }
+
+  BTreeNode<KeyType, N>* cur = root;
+  while (!cur->isLeaf()) {
+    auto* internalNode = static_cast<BTreeInternalNode<KeyType, N>*>(cur);
+    std::size_t next_pointer_idx =
+        std::upper_bound(internalNode->keys, internalNode->keys + internalNode->numKeys, key) - internalNode->keys;
+    cur = internalNode->children[next_pointer_idx];
+  }
+
+  return static_cast<BTreeLeafNode<KeyType, N>*>(cur);
+}
+
+template <typename KeyType, std::size_t N> int BTree<KeyType, N>::insert(KeyType key, PageData* data) {
+  if (root == nullptr) {
+    root = new BTreeLeafNode<KeyType, N>();
+  }
+
+  BTreeLeafNode<KeyType, N>* leaf = find_leaf_for_key(key);
+  int result = leaf->insert_key(key, data);
+
+  if (result == -1) {
+    // TODO: Handle split
+  }
+
+  return result;
 }
 
 #endif
