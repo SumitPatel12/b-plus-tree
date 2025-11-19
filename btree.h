@@ -4,6 +4,7 @@
 #include "btree_fwd.h"
 #include "btree_internal_node.h"
 #include "btree_leaf_node.h"
+#include <cmath>
 
 /*
  * What do I want as an API in the BTree?
@@ -74,10 +75,12 @@ template <typename KeyType, std::size_t N> BTreeLeafNode<KeyType, N>* BTree<KeyT
 
 template <typename KeyType, std::size_t N>
 BTreeLeafNode<KeyType, N>* BTree<KeyType, N>::find_leaf_for_key(KeyType key) const {
+  // We'll we got not tree, so no leaf where we can insert the key.
   if (root == nullptr) {
     return nullptr;
   }
 
+  // Loop over the nodes until you find a leaf node.
   BTreeNode<KeyType, N>* cur = root;
   while (!cur->isLeaf()) {
     auto* internalNode = static_cast<BTreeInternalNode<KeyType, N>*>(cur);
@@ -86,10 +89,12 @@ BTreeLeafNode<KeyType, N>* BTree<KeyType, N>::find_leaf_for_key(KeyType key) con
     cur = internalNode->children[next_pointer_idx];
   }
 
+  // return what we found.
   return static_cast<BTreeLeafNode<KeyType, N>*>(cur);
 }
 
 template <typename KeyType, std::size_t N> InsertResult BTree<KeyType, N>::insert(KeyType key, PageData* data) {
+  // If we've got no tree, we need to make one.
   if (root == nullptr) {
     root = new BTreeLeafNode<KeyType, N>();
   }
@@ -99,11 +104,38 @@ template <typename KeyType, std::size_t N> InsertResult BTree<KeyType, N>::inser
     InsertResult result = leaf->insert_key(key, data);
     // TOOD: Handle failure scenarios.
     return result;
-  } else {
-    return InsertResult::Full;
   }
 
-  // TODO: Handle split.
+  // Split the node
+  // Handle the sibling pointers.
+  BTreeLeafNode<KeyType, N>* right_node = new BTreeLeafNode<KeyType, N>();
+  right_node->right_sibling = leaf->right_sibling;
+  leaf->right_sibling = right_node;
+
+  // Since N is the maximum number of pointers a node can accommodate, and N-1 is the upper limit for keys, and we want
+  // to move ceil((n-1)/2) which can be dumbed down to N / 2 for integer division.
+  size_t split_idx = N / 2;
+
+  // Move keys from split_idx to N-2 (end of current keys) to right_node.
+  int moved_count = 0;
+  for (size_t i = split_idx; i < leaf->numKeys; ++i) {
+    right_node->keys[moved_count] = leaf->keys[i];
+    right_node->dataPointers[moved_count] = leaf->dataPointers[i];
+    moved_count++;
+  }
+  // Populate the correct stats for the split nodes.
+  right_node->numKeys = moved_count;
+  leaf->numKeys = split_idx;
+
+  // Find which node we'd have to insert the new key into.
+  // Since we spit we know there's at least one key in the right_node, but we better be sure.
+  if (right_node->numKeys > 0 && key >= right_node->keys[0]) {
+    right_node->insert_key(key, data);
+  } else {
+    leaf->insert_key(key, data);
+  }
+
+  // Now we've got to propagate the split to the parent.
 
   return InsertResult::Success;
 }
