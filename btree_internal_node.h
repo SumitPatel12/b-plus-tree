@@ -2,6 +2,8 @@
 #define BTREE_INTERNAL_NODE_H
 
 #include "btree_fwd.h"
+#include <algorithm>
+#include <ranges>
 
 // Internal node can be root or branch, contains pointers to child nodes.
 // Keys are of type KeyType, and a max capacity of N pointers.
@@ -35,10 +37,8 @@ InsertResult BTreeInternalNode<KeyType, N>::insert_key(KeyType key, BTreeNode<Ke
     return InsertResult::Duplicate;
   }
 
-  for (std::size_t i = this->numKeys; i > pos.index; --i) {
-    keys[i] = keys[i - 1];
-    children[i + 1] = children[i];
-  }
+  std::ranges::move_backward(keys + pos.index, keys + this->numKeys, keys + this->numKeys + 1);
+  std::ranges::move_backward(children + pos.index + 1, children + this->numKeys + 1, children + this->numKeys + 2);
 
   keys[pos.index] = key;
   children[pos.index + 1] = node;

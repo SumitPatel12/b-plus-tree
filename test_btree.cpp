@@ -34,22 +34,64 @@ void test_insert_multiple() {
     std::cout << "Passed!" << std::endl;
 }
 
-void test_node_full() {
-    std::cout << "Testing node full..." << std::endl;
+void test_split_leaf() {
+    std::cout << "Testing leaf split..." << std::endl;
     BTree<int, 3> tree; // Capacity 3, so max keys = 2
     tree.insert(10, nullptr);
     tree.insert(20, nullptr);
     
-    // Third insert should fail (return Full) because split is not implemented
+    // Third insert should cause a split
     InsertResult result = tree.insert(30, nullptr);
-    assert(result == InsertResult::Full);
+    assert(result == InsertResult::Success);
+    
+    // Verify split
+    // We can't easily access root/structure from outside without friend or public API
+    // But we can verify find works for all keys
+    assert(tree.find(10) != nullptr);
+    assert(tree.find(20) != nullptr);
+    assert(tree.find(30) != nullptr);
+    
+    // Verify they are in correct leaves (optional, if find works it's good indication)
+    auto* leaf1 = tree.find(10);
+    auto* leaf2 = tree.find(30);
+    assert(leaf1 != leaf2); // Should be different nodes
+    
+    std::cout << "Passed!" << std::endl;
+}
+
+void test_split_internal() {
+    std::cout << "Testing internal node split (cascading)..." << std::endl;
+    BTree<int, 3> tree; // Capacity 3
+    // Insert 10, 20, 30 -> Root: [20], L:[10], R:[20, 30]
+    tree.insert(10, nullptr);
+    tree.insert(20, nullptr);
+    tree.insert(30, nullptr);
+    
+    // Insert 40 -> R splits. R:[20], R2:[30, 40]. Promoted 30. Root: [20, 30].
+    tree.insert(40, nullptr);
+    
+    // Insert 50 -> R2 splits. R2:[30], R3:[40, 50]. Promoted 40.
+    // Root [20, 30] needs to insert 40. Root full.
+    // Root splits. Left:[20]. Right:[40]. Promoted 30.
+    // New Root: [30].
+    tree.insert(50, nullptr);
+    
+    assert(tree.find(10) != nullptr);
+    assert(tree.find(20) != nullptr);
+    assert(tree.find(30) != nullptr);
+    assert(tree.find(40) != nullptr);
+    assert(tree.find(50) != nullptr);
+    
+    tree.print();
+
     std::cout << "Passed!" << std::endl;
 }
 
 int main() {
     test_insert_empty_tree();
     test_insert_multiple();
-    test_node_full();
+    test_split_leaf();
+    test_split_internal();
     std::cout << "All tests passed!" << std::endl;
     return 0;
 }

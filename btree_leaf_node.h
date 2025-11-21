@@ -2,6 +2,8 @@
 #define BTREE_LEAF_NODE_H
 
 #include "btree_fwd.h"
+#include <algorithm>
+#include <ranges>
 
 // Leaf node, contains key-pointer pairs pointing to PageData, and pointers to their right sibling.
 template <typename KeyType, std::size_t N> class BTreeLeafNode : public BTreeNode<KeyType, N> {
@@ -37,10 +39,8 @@ template <typename KeyType, std::size_t N> InsertResult BTreeLeafNode<KeyType, N
   }
 
   // Shift keys and pointers by 1 to make room for the new key
-  for (std::size_t i = this->numKeys; i > pos.index; --i) {
-    keys[i] = keys[i - 1];
-    dataPointers[i] = dataPointers[i - 1];
-  }
+  std::ranges::move_backward(keys + pos.index, keys + this->numKeys, keys + this->numKeys + 1);
+  std::ranges::move_backward(dataPointers + pos.index, dataPointers + this->numKeys, dataPointers + this->numKeys + 1);
 
   // Now since I've made space for the key, time to insert it.
   keys[pos.index] = key;
