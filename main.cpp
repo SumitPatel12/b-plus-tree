@@ -14,8 +14,14 @@ void run_demo() {
     while (true) {
         std::cout << "\n> ";
         if (std::cin >> key) {
-            std::cout << "Inserting " << key << "..." << std::endl;
-            tree.insert(key, nullptr);
+            InsertResult result = tree.insert(key, nullptr);
+            if (result == InsertResult::Duplicate) {
+                std::cout << "Key " << key << " already exists." << std::endl;
+            } else if (result == InsertResult::Full) {
+                std::cout << "Tree is full (should not happen with splits)." << std::endl;
+            } else {
+                std::cout << "Inserted " << key << "." << std::endl;
+            }
             std::cout << "Current Tree State:" << std::endl;
             tree.print();
         } else {
@@ -27,28 +33,13 @@ void run_demo() {
 
 int main() {
     int n;
-    std::cout << "Enter B-Tree Order (N) [3-10]: ";
+    std::cout << "Enter B-Tree Capacity (N): ";
     if (!(std::cin >> n)) {
         std::cout << "Invalid input. Exiting." << std::endl;
         return 1;
     }
 
-    if (n < 3 || n > 10) {
-        std::cout << "Order must be between 3 and 10." << std::endl;
-        return 1;
-    }
-
-    switch (n) {
-        case 3: run_demo<3>(); break;
-        case 4: run_demo<4>(); break;
-        case 5: run_demo<5>(); break;
-        case 6: run_demo<6>(); break;
-        case 7: run_demo<7>(); break;
-        case 8: run_demo<8>(); break;
-        case 9: run_demo<9>(); break;
-        case 10: run_demo<10>(); break;
-        default: std::cout << "Unsupported order." << std::endl; break;
-    }
+    run_demo<n>();
 
     std::cout << "Exiting..." << std::endl;
     return 0;

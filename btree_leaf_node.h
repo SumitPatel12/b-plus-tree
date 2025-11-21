@@ -1,7 +1,7 @@
 #ifndef BTREE_LEAF_NODE_H
 #define BTREE_LEAF_NODE_H
 
-#include "btree_fwd.h"
+#include "btree_types.h"
 #include <algorithm>
 #include <ranges>
 
@@ -21,21 +21,21 @@ public:
   bool isFull() const override { return this->numKeys >= (N - 1); }
   bool isLeaf() const override { return true; }
 
-  InsertResult insert_key(KeyType key, PageData* page);
+  InsertResult insert_key(const KeyType& key, PageData* page);
 };
 
 // I'll have to think more on the return types and the API contract for this one maybe
-template <typename KeyType, std::size_t N> InsertResult BTreeLeafNode<KeyType, N>::insert_key(KeyType key, PageData* page) {
-  // If it's full we need a split so we return -1
-  if (this->numKeys >= (N - 1)) {
-    return InsertResult::Full;
-  }
-
+template <typename KeyType, std::size_t N> InsertResult BTreeLeafNode<KeyType, N>::insert_key(const KeyType& key, PageData* page) {
   // We don't want duplicates
-  const InsertPosition pos = find_index_greater_than_or_equal(keys, this->numKeys, key);
+  const InsertPosition pos = find_index_greater_than_or_equal(std::span<const KeyType>(keys, this->numKeys), key);
   // TODO: We need something better maybe?
   if (pos.is_duplicate) {
     return InsertResult::Duplicate;
+  }
+
+  // If it's full we need a split so we return -1
+  if (this->numKeys >= (N - 1)) {
+    return InsertResult::Full;
   }
 
   // Shift keys and pointers by 1 to make room for the new key

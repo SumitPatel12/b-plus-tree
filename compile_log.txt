@@ -1,0 +1,55 @@
+In file included from main.cpp:3:
+In file included from ./btree.h:4:
+./btree_types.h:8:10: error: 'span ' file not found, did you mean 'span'?
+    8 | #include <span >
+      |          ^~~~~~~
+      |          <span>
+main.cpp:18:13: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   18 |             tree.insert(key, nullptr);
+      |             ^~~~~~~~~~~ ~~~~~~~~~~~~
+main.cpp:42:17: note: in instantiation of function template specialization 'run_demo<3UL>' requested here
+   42 |         case 3: run_demo<3>(); break;
+      |                 ^
+main.cpp:18:13: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   18 |             tree.insert(key, nullptr);
+      |             ^~~~~~~~~~~ ~~~~~~~~~~~~
+main.cpp:43:17: note: in instantiation of function template specialization 'run_demo<4UL>' requested here
+   43 |         case 4: run_demo<4>(); break;
+      |                 ^
+main.cpp:18:13: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   18 |             tree.insert(key, nullptr);
+      |             ^~~~~~~~~~~ ~~~~~~~~~~~~
+main.cpp:44:17: note: in instantiation of function template specialization 'run_demo<5UL>' requested here
+   44 |         case 5: run_demo<5>(); break;
+      |                 ^
+main.cpp:18:13: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   18 |             tree.insert(key, nullptr);
+      |             ^~~~~~~~~~~ ~~~~~~~~~~~~
+main.cpp:45:17: note: in instantiation of function template specialization 'run_demo<6UL>' requested here
+   45 |         case 6: run_demo<6>(); break;
+      |                 ^
+main.cpp:18:13: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   18 |             tree.insert(key, nullptr);
+      |             ^~~~~~~~~~~ ~~~~~~~~~~~~
+main.cpp:46:17: note: in instantiation of function template specialization 'run_demo<7UL>' requested here
+   46 |         case 7: run_demo<7>(); break;
+      |                 ^
+main.cpp:18:13: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   18 |             tree.insert(key, nullptr);
+      |             ^~~~~~~~~~~ ~~~~~~~~~~~~
+main.cpp:47:17: note: in instantiation of function template specialization 'run_demo<8UL>' requested here
+   47 |         case 8: run_demo<8>(); break;
+      |                 ^
+main.cpp:18:13: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   18 |             tree.insert(key, nullptr);
+      |             ^~~~~~~~~~~ ~~~~~~~~~~~~
+main.cpp:48:17: note: in instantiation of function template specialization 'run_demo<9UL>' requested here
+   48 |         case 9: run_demo<9>(); break;
+      |                 ^
+main.cpp:18:13: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   18 |             tree.insert(key, nullptr);
+      |             ^~~~~~~~~~~ ~~~~~~~~~~~~
+main.cpp:49:18: note: in instantiation of function template specialization 'run_demo<10UL>' requested here
+   49 |         case 10: run_demo<10>(); break;
+      |                  ^
+8 warnings and 1 error generated.

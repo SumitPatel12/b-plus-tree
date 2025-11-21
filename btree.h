@@ -1,7 +1,7 @@
 #ifndef BTREE_H
 #define BTREE_H
 
-#include "btree_fwd.h"
+#include "btree_types.h"
 #include "btree_internal_node.h"
 #include "btree_leaf_node.h"
 #include <algorithm>
@@ -34,26 +34,68 @@ template <typename KeyType, std::size_t N> class BTree {
 public:
   BTree() : root(nullptr) {}
 
-  BTreeLeafNode<KeyType, N>* find(KeyType key) const;
-  InsertResult insert(KeyType key, PageData* data);
+  ~BTree();
+  [[nodiscard]] BTreeLeafNode<KeyType, N>* find(const KeyType& key) const;
+  [[nodiscard]] InsertResult insert(const KeyType& key, PageData* data);
   void print() const;
 
 private:
-  BTreeLeafNode<KeyType, N>* find_leaf_for_key(KeyType key, std::vector<BTreeNode<KeyType, N>*>& path) const;
-  void insert_key_in_parent(BTreeNode<KeyType, N>* node, KeyType key, BTreeNode<KeyType, N>* new_node, std::vector<BTreeNode<KeyType, N>*>& path);
+  BTreeLeafNode<KeyType, N>* find_leaf_for_key(const KeyType& key, std::vector<BTreeNode<KeyType, N>*>& path) const;
+  void insert_key_in_parent(BTreeNode<KeyType, N>* node, const KeyType& key, BTreeNode<KeyType, N>* new_node, std::vector<BTreeNode<KeyType, N>*>& path);
+  void delete_tree(BTreeNode<KeyType, N>* node);
+};
+
+template <typename KeyType, std::size_t N>
+BTree<KeyType, N>::~BTree() {
+  delete_tree(root);
+}
+
+template <typename KeyType, std::size_t N>
+void BTree<KeyType, N>::delete_tree(BTreeNode<KeyType, N>* node) {
+  if (node == nullptr) {
+    return;
+  }
+
+  if (!node->isLeaf()) {
+    auto* internalNode = static_cast<BTreeInternalNode<KeyType, N>*>(node);
+    for (std::size_t i = 0; i <= internalNode->numKeys; ++i) {
+      delete_tree(internalNode->children[i]);
+    }
+  }
+
+  delete node;
 };
 
 // TODO: To keep track of parents of the nodes I'll likely need to keep the pointers in a stack when finding and return
 // them, right?
 // Find and returns the pointer to the leaf node containing given key. Returns null pointer if key is not found.
-template <typename KeyType, std::size_t N> BTreeLeafNode<KeyType, N>* BTree<KeyType, N>::find(KeyType key) const {
+template <typename KeyType, std::size_t N> BTreeLeafNode<KeyType, N>* BTree<KeyType, N>::find(const KeyType& key) const {
+  std::vector<BTreeNode<KeyType, N>*> path;
+  BTreeLeafNode<KeyType, N>* leafNode = find_leaf_for_key(key, path);
+
+  if (leafNode == nullptr) {
+    return nullptr;
+  }
+
+  auto it = std::ranges::lower_bound(leafNode->keys, leafNode->keys + leafNode->numKeys, key);
+  
+  if (it != leafNode->keys + leafNode->numKeys && *it == key) {
+    return leafNode;
+  }
+  return nullptr;
+}
+
+template <typename KeyType, std::size_t N>
+BTreeLeafNode<KeyType, N>* BTree<KeyType, N>::find_leaf_for_key(const KeyType& key, std::vector<BTreeNode<KeyType, N>*>& path) const {
+  // We'll we got not tree, so no leaf where we can insert the key.
   if (root == nullptr) {
     return nullptr;
   }
 
+  // Loop over the nodes until you find a leaf node.
   BTreeNode<KeyType, N>* cur = root;
-  // I need to iterate over nodes util I reach a leaf node. Right.
   while (!cur->isLeaf()) {
+    path.push_back(cur);
     // Get the first key index that is greater than the key we're looking for, since there are going to be no duplicates
     // we don't need to worry about equals param.
     // The one we find will be the pointer we follow. For instance consider a capacity of 5 pointers, 4 keys. With a
@@ -74,34 +116,11 @@ template <typename KeyType, std::size_t N> BTreeLeafNode<KeyType, N>* BTree<KeyT
     cur = internalNode->children[next_pointer_idx];
   }
 
-  auto* leafNode = static_cast<BTreeLeafNode<KeyType, N>*>(cur);
-  std::size_t key_idx = std::find(leafNode->keys, leafNode->keys + cur->numKeys, key) - leafNode->keys;
-  // If the index was equal to the current size then we didn't find the key, so we return nullptr.
-  return key_idx == cur->numKeys ? nullptr : leafNode;
-}
-
-template <typename KeyType, std::size_t N>
-BTreeLeafNode<KeyType, N>* BTree<KeyType, N>::find_leaf_for_key(KeyType key, std::vector<BTreeNode<KeyType, N>*>& path) const {
-  // We'll we got not tree, so no leaf where we can insert the key.
-  if (root == nullptr) {
-    return nullptr;
-  }
-
-  // Loop over the nodes until you find a leaf node.
-  BTreeNode<KeyType, N>* cur = root;
-  while (!cur->isLeaf()) {
-    path.push_back(cur);
-    auto* internalNode = static_cast<BTreeInternalNode<KeyType, N>*>(cur);
-    auto it = std::ranges::upper_bound(internalNode->keys, internalNode->keys + internalNode->numKeys, key);
-    std::size_t next_pointer_idx = std::distance(internalNode->keys, it);
-    cur = internalNode->children[next_pointer_idx];
-  }
-
   // return what we found.
   return static_cast<BTreeLeafNode<KeyType, N>*>(cur);
 }
 
-template <typename KeyType, std::size_t N> InsertResult BTree<KeyType, N>::insert(KeyType key, PageData* data) {
+template <typename KeyType, std::size_t N> InsertResult BTree<KeyType, N>::insert(const KeyType& key, PageData* data) {
   // If we've got no tree, we need to make one.
   if (root == nullptr) {
     root = new BTreeLeafNode<KeyType, N>();
@@ -109,9 +128,8 @@ template <typename KeyType, std::size_t N> InsertResult BTree<KeyType, N>::inser
 
   std::vector<BTreeNode<KeyType, N>*> path;
   BTreeLeafNode<KeyType, N>* leaf = find_leaf_for_key(key, path);
-  if (!leaf->isFull()) {
-    InsertResult result = leaf->insert_key(key, data);
-    // TOOD: Handle failure scenarios.
+  InsertResult result = leaf->insert_key(key, data);
+  if (result != InsertResult::Full) {
     return result;
   }
 
@@ -150,7 +168,7 @@ template <typename KeyType, std::size_t N> InsertResult BTree<KeyType, N>::inser
 }
 
 template <typename KeyType, std::size_t N>
-void BTree<KeyType, N>::insert_key_in_parent(BTreeNode<KeyType, N>* node, KeyType key, BTreeNode<KeyType, N>* new_node, std::vector<BTreeNode<KeyType, N>*>& path) {
+void BTree<KeyType, N>::insert_key_in_parent(BTreeNode<KeyType, N>* node, const KeyType& key, BTreeNode<KeyType, N>* new_node, std::vector<BTreeNode<KeyType, N>*>& path) {
   if (path.empty()) {
     BTreeInternalNode<KeyType, N>* new_root = new BTreeInternalNode<KeyType, N>();
     new_root->keys[0] = key;
@@ -176,7 +194,7 @@ void BTree<KeyType, N>::insert_key_in_parent(BTreeNode<KeyType, N>* node, KeyTyp
   KeyType temp_keys[N];
   BTreeNode<KeyType, N>* temp_children[N + 1];
 
-  InsertPosition pos = find_index_greater_than_or_equal(parent->keys, parent->numKeys, key);
+  InsertPosition pos = find_index_greater_than_or_equal(std::span<const KeyType>(parent->keys, parent->numKeys), key);
 
   // Copy up to pos
   std::ranges::copy(parent->keys, parent->keys + pos.index, temp_keys);

@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <span>
+
 // Forward declarations
 template <typename KeyType, std::size_t N> class BTreeNode;
 template <typename KeyType, std::size_t N> class BTreeInternalNode;
@@ -51,12 +53,11 @@ public:
 };
 
 template <typename DataType>
-InsertPosition find_index_greater_than_or_equal(const DataType array[], size_t cur_size, DataType value) {
-  const DataType* end = array + cur_size;
-  const DataType* pointer = std::lower_bound(array, end, value);
-
-  size_t index = pointer - array; // Works even if pointer == end
-  bool is_duplicate = (pointer != end && *pointer == value);
+InsertPosition find_index_greater_than_or_equal(std::span<const DataType> array, DataType value) {
+  auto it = std::ranges::lower_bound(array, value);
+  
+  size_t index = std::distance(array.begin(), it);
+  bool is_duplicate = (it != array.end() && *it == value);
 
   return {index, is_duplicate};
 }
