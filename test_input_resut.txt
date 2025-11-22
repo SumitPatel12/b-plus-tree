@@ -1,0 +1,97 @@
+Enter B+ Tree Order (N): B+ Tree Interactive Demo (Order 4)
+========================================
+Commands:
+  i <key> - Insert a key
+  d <key> - Delete a key
+  r <min> <max> - Find keys in range [min, max)
+  q       - Quit
+========================================
+
+> Inserted 10
+
+Current Tree State:
+Level 0: [10] 
+
+> Inserted 20
+
+Current Tree State:
+Level 0: [10 20] 
+
+> Inserted 5
+
+Current Tree State:
+Level 0: [5 10 20] 
+
+> Inserted 15
+
+Current Tree State:
+Level 0: [20] 
+Level 1: [5 10 15] [20] 
+
+> Deleted 20
+
+Current Tree State:
+Level 0: [5 10 15] 
+
+> Inserted 25
+
+Current Tree State:
+Level 0: [15] 
+Level 1: [5 10] [15 25] 
+
+> Inserted 30
+
+Current Tree State:
+Level 0: [15] 
+Level 1: [5 10] [15 25 30] 
+
+> Inserted 3
+
+Current Tree State:
+Level 0: [15] 
+Level 1: [3 5 10] [15 25 30] 
+
+> Inserted 7
+
+Current Tree State:
+Level 0: [10 15] 
+Level 1: [3 5 7] [10] [15 25 30] 
+
+> Keys in range [5, 20): 5, 7, 10, 15
+
+Current Tree State:
+Level 0: [10 15] 
+Level 1: [3 5 7] [10] [15 25 30] 
+
+> Key 20 not found.
+
+Current Tree State:
+Level 0: [10 15] 
+Level 1: [3 5 7] [10] [15 25 30] 
+
+> Deleted 5
+
+Current Tree State:
+Level 0: [10 15] 
+Level 1: [3 7] [10] [15 25 30] 
+
+> Deleted 30
+
+Current Tree State:
+Level 0: [10 15] 
+Level 1: [3 7] [10] [15 25] 
+
+> Deleted 10
+
+Current Tree State:
+Level 0: [15] 
+Level 1: [3 7] [15 25] 
+
+> Keys in range [0, 50): 3, 7, 15, 25
+
+Current Tree State:
+Level 0: [15] 
+Level 1: [3 7] [15 25] 
+
+> 
+Exiting...
