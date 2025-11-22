@@ -479,17 +479,6 @@ void BTree<KeyType, N>::redistribute(BTreeNode<KeyType, N>* node, BTreeNode<KeyT
 // Handle underflow by redistributing or merging
 template <typename KeyType, std::size_t N>
 void BTree<KeyType, N>::handle_underflow(BTreeNode<KeyType, N>* node, std::vector<BTreeNode<KeyType, N>*>& path) {
-  // Special case: node is root
-  if (path.empty()) {
-    if (!node->isLeaf() && node->numKeys == 0) {
-      // Root has only one child, make it the new root
-      auto* internal_root = static_cast<BTreeInternalNode<KeyType, N>*>(node);
-      root = internal_root->children[0];
-      delete node;
-    }
-    return;
-  }
-
   BTreeNode<KeyType, N>* parent = path.back();
   path.pop_back();
 
