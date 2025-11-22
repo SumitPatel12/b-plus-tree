@@ -17,9 +17,20 @@ enum class BTreeNodeType { RootNode, BranchNode, LeafNode };
 
 enum class InsertResult { Success, Duplicate, Full };
 
+enum class DeletionResult { Success, KeyNotFound };
+
 struct InsertPosition {
   size_t index;
   bool is_duplicate;
+};
+
+// Information about a sibling node for deletion operations
+template <typename KeyType, std::size_t N>
+struct SiblingInfo {
+  BTreeNode<KeyType, N>* sibling;      // Pointer to the sibling node
+  KeyType separator_key;                // Key in parent separating node and sibling
+  std::size_t separator_index;          // Index of separator key in parent
+  bool is_left_sibling;                 // True if sibling is to the left of node
 };
 
 // 4KB page data block, that the leaf_nodes points to.

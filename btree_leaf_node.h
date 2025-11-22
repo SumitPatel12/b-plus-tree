@@ -20,8 +20,14 @@ public:
 
   bool isFull() const override { return this->numKeys >= (N - 1); }
   bool isLeaf() const override { return true; }
+  
+  // Check if node has fewer than minimum required keys (underflow condition)
+  bool isUnderflow() const { return this->numKeys < (N / 2); }  // ceil((N-1)/2) simplified
 
   InsertResult insert_key(const KeyType& key, PageData* page);
+  
+  // Delete a key from the leaf node. Returns true if key was found and deleted.
+  bool delete_key(const KeyType& key);
 };
 
 // I'll have to think more on the return types and the API contract for this one maybe
@@ -49,5 +55,27 @@ template <typename KeyType, std::size_t N> InsertResult BTreeLeafNode<KeyType, N
 
   return InsertResult::Success;
 };
+
+// Delete a key from the leaf node
+template <typename KeyType, std::size_t N>
+bool BTreeLeafNode<KeyType, N>::delete_key(const KeyType& key) {
+  // Find the key using binary search
+  auto it = std::ranges::lower_bound(keys, keys + this->numKeys, key);
+  
+  // Key not found
+  if (it == keys + this->numKeys || *it != key) {
+    return false;
+  }
+  
+  // Calculate position of the key to delete
+  std::size_t pos = std::distance(keys, it);
+  
+  // Shift keys and data pointers left to remove the key
+  std::ranges::copy(keys + pos + 1, keys + this->numKeys, keys + pos);
+  std::ranges::copy(dataPointers + pos + 1, dataPointers + this->numKeys, dataPointers + pos);
+  
+  this->numKeys--;
+  return true;
+}
 
 #endif

@@ -37,12 +37,22 @@ public:
   ~BTree();
   [[nodiscard]] BTreeLeafNode<KeyType, N>* find(const KeyType& key) const;
   [[nodiscard]] InsertResult insert(const KeyType& key, PageData* data);
+  [[nodiscard]] DeletionResult delete_key(const KeyType& key);
   void print() const;
 
 private:
   BTreeLeafNode<KeyType, N>* find_leaf_for_key(const KeyType& key, std::vector<BTreeNode<KeyType, N>*>& path) const;
   void insert_key_in_parent(BTreeNode<KeyType, N>* node, const KeyType& key, BTreeNode<KeyType, N>* new_node, std::vector<BTreeNode<KeyType, N>*>& path);
   void delete_tree(BTreeNode<KeyType, N>* node);
+  
+  // Deletion helper methods
+  SiblingInfo<KeyType, N> get_sibling(BTreeNode<KeyType, N>* node, BTreeNode<KeyType, N>* parent) const;
+  bool can_merge(BTreeNode<KeyType, N>* node, BTreeNode<KeyType, N>* sibling) const;
+  void merge_nodes(BTreeNode<KeyType, N>* node, BTreeNode<KeyType, N>* sibling, const KeyType& separator,
+                   bool sibling_is_left, BTreeNode<KeyType, N>* parent, std::vector<BTreeNode<KeyType, N>*>& path);
+  void redistribute(BTreeNode<KeyType, N>* node, BTreeNode<KeyType, N>* sibling, const KeyType& separator,
+                    std::size_t separator_index, bool sibling_is_left, BTreeNode<KeyType, N>* parent);
+  void handle_underflow(BTreeNode<KeyType, N>* node, std::vector<BTreeNode<KeyType, N>*>& path);
 };
 
 template <typename KeyType, std::size_t N>
@@ -227,6 +237,271 @@ void BTree<KeyType, N>::insert_key_in_parent(BTreeNode<KeyType, N>* node, const 
   sibling->numKeys = sibling_key_count;
 
   insert_key_in_parent(parent, promoted_key, sibling, path);
+}
+
+// Main deletion method - delete a key from the B+ tree
+template <typename KeyType, std::size_t N>
+DeletionResult BTree<KeyType, N>::delete_key(const KeyType& key) {
+  if (root == nullptr) {
+    return DeletionResult::KeyNotFound;
+  }
+  
+  std::vector<BTreeNode<KeyType, N>*> path;
+  BTreeLeafNode<KeyType, N>* leaf = find_leaf_for_key(key, path);
+  
+  if (leaf == nullptr) {
+    return DeletionResult::KeyNotFound;
+  }
+  
+  // Try to delete the key from the leaf node
+  if (!leaf->delete_key(key)) {
+    return DeletionResult::KeyNotFound;
+  }
+  
+  // Special case: root is a leaf and is now empty
+  if (root == leaf && leaf->numKeys == 0) {
+    delete root;
+    root = nullptr;
+    return DeletionResult::Success;
+  }
+  
+  // Check if the leaf node underflowed (only if it's not the root)
+  if (root != leaf && leaf->isUnderflow()) {
+    handle_underflow(leaf, path);
+  }
+  
+  return DeletionResult::Success;
+}
+
+// Get sibling information for a node
+template <typename KeyType, std::size_t N>
+SiblingInfo<KeyType, N> BTree<KeyType, N>::get_sibling(BTreeNode<KeyType, N>* node, BTreeNode<KeyType, N>* parent) const {
+  auto* internal_parent = static_cast<BTreeInternalNode<KeyType, N>*>(parent);
+  
+  // Find the index of node in parent's children
+  std::size_t node_index = 0;
+  for (std::size_t i = 0; i <= internal_parent->numKeys; ++i) {
+    if (internal_parent->children[i] == node) {
+      node_index = i;
+      break;
+    }
+  }
+  
+  // Prefer left sibling for consistency
+  if (node_index > 0) {
+    return {
+      internal_parent->children[node_index - 1],  // left sibling
+      internal_parent->keys[node_index - 1],       // separator key
+      node_index - 1,                              // separator index
+      true                                         // is_left_sibling
+    };
+  }
+  
+  // Use right sibling if no left sibling
+  if (node_index < internal_parent->numKeys) {
+    return {
+      internal_parent->children[node_index + 1],  // right sibling
+      internal_parent->keys[node_index],          // separator key
+      node_index,                                 // separator index
+      false                                       // is_left_sibling
+    };
+  }
+  
+  // Should never reach here
+  return {nullptr, KeyType{}, 0, false};
+}
+
+// Check if two nodes can be merged
+template <typename KeyType, std::size_t N>
+bool BTree<KeyType, N>::can_merge(BTreeNode<KeyType, N>* node, BTreeNode<KeyType, N>* sibling) const {
+  if (node->isLeaf()) {
+    // For leaf nodes, check if combined keys fit
+    return node->numKeys + sibling->numKeys <= (N - 1);
+  } else {
+    // For internal nodes, need space for separator key from parent
+    return node->numKeys + sibling->numKeys + 1 <= (N - 1);
+  }
+}
+
+// Merge two nodes into one
+template <typename KeyType, std::size_t N>
+void BTree<KeyType, N>::merge_nodes(BTreeNode<KeyType, N>* node, BTreeNode<KeyType, N>* sibling,
+                                     const KeyType& separator, bool sibling_is_left,
+                                     BTreeNode<KeyType, N>* parent, std::vector<BTreeNode<KeyType, N>*>& path) {
+  // Normalize: always merge right node into left node
+  BTreeNode<KeyType, N>* left_node = sibling_is_left ? sibling : node;
+  BTreeNode<KeyType, N>* right_node = sibling_is_left ? node : sibling;
+  
+  if (left_node->isLeaf()) {
+    // Merge leaf nodes
+    auto* left_leaf = static_cast<BTreeLeafNode<KeyType, N>*>(left_node);
+    auto* right_leaf = static_cast<BTreeLeafNode<KeyType, N>*>(right_node);
+    
+    // Copy all entries from right to left
+    std::ranges::copy(right_leaf->keys, right_leaf->keys + right_leaf->numKeys,
+                     left_leaf->keys + left_leaf->numKeys);
+    std::ranges::copy(right_leaf->dataPointers, right_leaf->dataPointers + right_leaf->numKeys,
+                     left_leaf->dataPointers + left_leaf->numKeys);
+    
+    left_leaf->numKeys += right_leaf->numKeys;
+    
+    // Update sibling pointer: left now points to right's right sibling
+    left_leaf->right_sibling = right_leaf->right_sibling;
+    
+    delete right_node;
+  } else {
+    // Merge internal nodes
+    auto* left_internal = static_cast<BTreeInternalNode<KeyType, N>*>(left_node);
+    auto* right_internal = static_cast<BTreeInternalNode<KeyType, N>*>(right_node);
+    
+    // Pull down separator key from parent
+    left_internal->keys[left_internal->numKeys] = separator;
+    left_internal->numKeys++;
+    
+    // Copy all keys and children from right to left
+    std::ranges::copy(right_internal->keys, right_internal->keys + right_internal->numKeys,
+                     left_internal->keys + left_internal->numKeys);
+    std::ranges::copy(right_internal->children, right_internal->children + right_internal->numKeys + 1,
+                     left_internal->children + left_internal->numKeys);
+    
+    left_internal->numKeys += right_internal->numKeys;
+    
+    delete right_node;
+  }
+  
+  // Delete the separator and pointer from parent
+  auto* internal_parent = static_cast<BTreeInternalNode<KeyType, N>*>(parent);
+  internal_parent->delete_entry(separator, right_node);
+  
+  // Special case: if parent is root and now empty, make left_node the new root
+  if (parent == root && internal_parent->numKeys == 0) {
+    root = left_node;
+    delete parent;
+  } else if (parent != root && internal_parent->isUnderflow()) {
+    // Parent might now underflow, handle recursively
+    handle_underflow(parent, path);
+  }
+}
+
+// Redistribute entries between node and sibling
+template <typename KeyType, std::size_t N>
+void BTree<KeyType, N>::redistribute(BTreeNode<KeyType, N>* node, BTreeNode<KeyType, N>* sibling,
+                                      const KeyType& separator, std::size_t separator_index,
+                                      bool sibling_is_left, BTreeNode<KeyType, N>* parent) {
+  auto* internal_parent = static_cast<BTreeInternalNode<KeyType, N>*>(parent);
+  
+  if (sibling_is_left) {
+    // Borrow from left sibling
+    if (node->isLeaf()) {
+      auto* leaf = static_cast<BTreeLeafNode<KeyType, N>*>(node);
+      auto* sibling_leaf = static_cast<BTreeLeafNode<KeyType, N>*>(sibling);
+      
+      std::size_t borrow_idx = sibling_leaf->numKeys - 1;
+      
+      // Shift node's entries right to make room
+      std::ranges::move_backward(leaf->keys, leaf->keys + leaf->numKeys,
+                                leaf->keys + leaf->numKeys + 1);
+      std::ranges::move_backward(leaf->dataPointers, leaf->dataPointers + leaf->numKeys,
+                                leaf->dataPointers + leaf->numKeys + 1);
+      
+      // Move last entry from sibling to first position in node
+      leaf->keys[0] = sibling_leaf->keys[borrow_idx];
+      leaf->dataPointers[0] = sibling_leaf->dataPointers[borrow_idx];
+      leaf->numKeys++;
+      sibling_leaf->numKeys--;
+      
+      // Update separator in parent to node's new first key
+      internal_parent->keys[separator_index] = leaf->keys[0];
+    } else {
+      auto* internal = static_cast<BTreeInternalNode<KeyType, N>*>(node);
+      auto* sibling_internal = static_cast<BTreeInternalNode<KeyType, N>*>(sibling);
+      
+      std::size_t borrow_key_idx = sibling_internal->numKeys - 1;
+      
+      // Shift node's entries right
+      std::ranges::move_backward(internal->keys, internal->keys + internal->numKeys,
+                                internal->keys + internal->numKeys + 1);
+      std::ranges::move_backward(internal->children, internal->children + internal->numKeys + 1,
+                                internal->children + internal->numKeys + 2);
+      
+      // Bring down separator from parent as first key in node
+      internal->keys[0] = separator;
+      internal->children[0] = sibling_internal->children[sibling_internal->numKeys];
+      internal->numKeys++;
+      
+      // Move last key from sibling up to parent
+      internal_parent->keys[separator_index] = sibling_internal->keys[borrow_key_idx];
+      sibling_internal->numKeys--;
+    }
+  } else {
+    // Borrow from right sibling
+    if (node->isLeaf()) {
+      auto* leaf = static_cast<BTreeLeafNode<KeyType, N>*>(node);
+      auto* sibling_leaf = static_cast<BTreeLeafNode<KeyType, N>*>(sibling);
+      
+      // Move first entry from sibling to last position in node
+      leaf->keys[leaf->numKeys] = sibling_leaf->keys[0];
+      leaf->dataPointers[leaf->numKeys] = sibling_leaf->dataPointers[0];
+      leaf->numKeys++;
+      
+      // Shift sibling's entries left
+      std::ranges::copy(sibling_leaf->keys + 1, sibling_leaf->keys + sibling_leaf->numKeys,
+                       sibling_leaf->keys);
+      std::ranges::copy(sibling_leaf->dataPointers + 1, sibling_leaf->dataPointers + sibling_leaf->numKeys,
+                       sibling_leaf->dataPointers);
+      sibling_leaf->numKeys--;
+      
+      // Update separator in parent to sibling's new first key
+      internal_parent->keys[separator_index] = sibling_leaf->keys[0];
+    } else {
+      auto* internal = static_cast<BTreeInternalNode<KeyType, N>*>(node);
+      auto* sibling_internal = static_cast<BTreeInternalNode<KeyType, N>*>(sibling);
+      
+      // Bring down separator from parent as last key in node
+      internal->keys[internal->numKeys] = separator;
+      internal->children[internal->numKeys + 1] = sibling_internal->children[0];
+      internal->numKeys++;
+      
+      // Move first key from sibling up to parent
+      internal_parent->keys[separator_index] = sibling_internal->keys[0];
+      
+      // Shift sibling's entries left
+      std::ranges::copy(sibling_internal->keys + 1, sibling_internal->keys + sibling_internal->numKeys,
+                       sibling_internal->keys);
+      std::ranges::copy(sibling_internal->children + 1, sibling_internal->children + sibling_internal->numKeys + 1,
+                       sibling_internal->children);
+      sibling_internal->numKeys--;
+    }
+  }
+}
+
+// Handle underflow by redistributing or merging
+template <typename KeyType, std::size_t N>
+void BTree<KeyType, N>::handle_underflow(BTreeNode<KeyType, N>* node, std::vector<BTreeNode<KeyType, N>*>& path) {
+  // Special case: node is root
+  if (path.empty()) {
+    if (!node->isLeaf() && node->numKeys == 0) {
+      // Root has only one child, make it the new root
+      auto* internal_root = static_cast<BTreeInternalNode<KeyType, N>*>(node);
+      root = internal_root->children[0];
+      delete node;
+    }
+    return;
+  }
+  
+  BTreeNode<KeyType, N>* parent = path.back();
+  path.pop_back();
+  
+  // Get sibling information
+  SiblingInfo<KeyType, N> sib_info = get_sibling(node, parent);
+  
+  // Check if we can merge
+  if (can_merge(node, sib_info.sibling)) {
+    merge_nodes(node, sib_info.sibling, sib_info.separator_key, sib_info.is_left_sibling, parent, path);
+  } else {
+    // Redistribute entries
+    redistribute(node, sib_info.sibling, sib_info.separator_key, sib_info.separator_index, sib_info.is_left_sibling, parent);
+  }
 }
 
 template <typename KeyType, std::size_t N>

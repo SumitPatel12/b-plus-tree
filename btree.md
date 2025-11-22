@@ -136,39 +136,188 @@ One more thing to note is that after deletion we might not always be able to mer
 Another case to consider is that when merging nodes who are direct children of the root node. We have an invariant that says: `Root node is either the only node in the tree or it has at least two children`. If we merge the only two children of the root node we compromise that invariant, so that case needs to be handled as well.
 
 ```py
-def delete_key(Key K, Pointer P):
-    L = find(K)
-    if (N == root && N has only one child):
-        Make child of N the root and delete N
-    else if (deleting from N leaves it with too few pointers or keys):
-        sibling = previous or next child of parent(N)
-        K2 = value b/w pointers N and sibling in parent(N)
-        if (entries of N and sibling fit in a single node):
-            if (N is a predecessor of sibling): swap the pointers of both
-            if (N != leaf_node):
-                append K2 and all keys and pointers of N to sibling
-            else:
-                append all Key, Pointer pairs in N to sibling
-                # The merged node points to the right sibling of the deleted node.
-                sibling.pointers[n] = L.pointers[n]
-            delete_key(parent(N), K2, sibling)
-            delete_node(N)
+def delete_key(Key K):
+    """Delete key K from the B+ tree"""
+    L = find_leaf(K)
+    
+    if K not in L:
+        return "Key not found"
+    
+    # Remove the key from the leaf node
+    remove K from L
+    
+    # Special case: if L is the root and is now empty
+    if L == root and L.numKeys == 0:
+        delete L
+        root = None
+        return "Success"
+    
+    # Check if L needs rebalancing (has fewer than minimum keys)
+    if needs_rebalancing(L):
+        handle_underflow(L)
+    
+    return "Success"
+
+
+def needs_rebalancing(Node N):
+    """Check if node N has too few entries after deletion"""
+    # Root can have fewer entries
+    if N == root:
+        if N.isLeaf():
+            return False  # Leaf root can be sparse
         else:
-            if (sibling is a predecessor of N):
-                if (N != leaf_node):
-                    last_pointer_idx = index of the last_pointer of sibling
-                    remove(sibling.keys[last_pointer_idx - 1], sibling.pointers[last_pointer_idx])
-                    insert the pair (sibling.pointers[last_pointer_idx], K2) as the first pointer and value in N
-                    replace K2 in the parent(N) by sibling.keys[last_pointer_idx - 1]
-                else:
-                    last_pointer_idx = index of the last_pointer of sibling
-                    last_key = sibling.pointers[last_pointer_idx]
-                    remove(sibling.keys[last_pointer_idx], last_key)
-                    insert the pair (sibling.keys[last_pointer_idx], last_key) as the first pointer and value in N
-                    replace K2 in the parent(N) by last_key
-            else:
-                # Symmetric to the then case.
-                # I planned to write this, whole thing but man if it's tardy.
+            # Internal root needs at least 1 key (2 children)
+            return N.numKeys == 0
+    
+    # Non-root nodes must maintain minimum occupancy
+    if N.isLeaf():
+        # Leaf must have at least ceil((n-1)/2) keys
+        return N.numKeys < ceil((n - 1) / 2)
+    else:
+        # Internal node must have at least ceil(n/2) pointers
+        # Which means at least ceil(n/2) - 1 keys
+        return (N.numKeys + 1) < ceil(n / 2)
+
+
+def handle_underflow(Node N):
+    """Handle underflow by redistributing or merging"""
+    P = parent(N)
+    
+    # Special case: root with only one child
+    if N == root and not N.isLeaf() and N.numKeys == 0:
+        # Root has only one child, make it the new root
+        root = N.pointers[0]
+        delete N
+        return
+    
+    # Get a sibling (prefer left sibling for consistency)
+    left_sibling = get_left_sibling(N, P)
+    right_sibling = get_right_sibling(N, P)
+    
+    # Determine which sibling to use and get separator key
+    if left_sibling is not None:
+        sibling = left_sibling
+        sibling_is_left = True
+        K_sep = separator key in P between left_sibling and N
+    else:
+        sibling = right_sibling
+        sibling_is_left = False
+        K_sep = separator key in P between N and right_sibling
+    
+    # Check if merge is possible (combined entries fit in one node)
+    if can_merge(N, sibling):
+        merge_nodes(N, sibling, K_sep, sibling_is_left, P)
+    else:
+        # Redistribute entries between N and sibling
+        redistribute(N, sibling, K_sep, sibling_is_left, P)
+
+
+def can_merge(Node N, Node sibling):
+    """Check if N and sibling can fit in a single node"""
+    if N.isLeaf():
+        # For leaf nodes, just check if combined keys fit
+        return N.numKeys + sibling.numKeys <= (n - 1)
+    else:
+        # For internal nodes, need space for separator key from parent
+        return N.numKeys + sibling.numKeys + 1 <= (n - 1)
+
+
+def merge_nodes(Node N, Node sibling, Key K_sep, bool sibling_is_left, Node P):
+    """Merge N and sibling into a single node"""
+    # Normalize: always merge right node into left node
+    if sibling_is_left:
+        left_node = sibling
+        right_node = N
+    else:
+        left_node = N
+        right_node = sibling
+    
+    if left_node.isLeaf():
+        # Merge leaf nodes
+        # Copy all entries from right_node to left_node
+        append all (key, data) pairs from right_node to left_node
+        # Update sibling pointer: left_node now points to right_node's right sibling
+        left_node.right_sibling = right_node.right_sibling
+    else:
+        # Merge internal nodes
+        # Pull down separator key from parent
+        append K_sep to left_node
+        # Copy all keys and pointers from right_node to left_node
+        append all keys from right_node to left_node
+        append all pointers from right_node to left_node
+    
+    # Delete the separator key and pointer to right_node from parent
+    delete_entry(P, K_sep, right_node)
+    delete right_node
+    
+    # Parent might now underflow, check recursively
+    if needs_rebalancing(P):
+        handle_underflow(P)
+
+
+def redistribute(Node N, Node sibling, Key K_sep, bool sibling_is_left, Node P):
+    """Redistribute entries between N and sibling to fix underflow"""
+    
+    if sibling_is_left:
+        # Borrow from left sibling
+        if N.isLeaf():
+            # Take the last entry from left sibling
+            last_idx = sibling.numKeys - 1
+            borrowed_key = sibling.keys[last_idx]
+            borrowed_data = sibling.dataPointers[last_idx]
+            remove last entry from sibling
+            
+            # Insert borrowed entry as first entry in N
+            insert (borrowed_key, borrowed_data) as first entry in N
+            
+            # Update separator in parent to N's new first key
+            replace K_sep in P with N.keys[0]
+        else:
+            # Internal node: borrow last pointer and key from left sibling
+            last_key_idx = sibling.numKeys - 1
+            borrowed_key = sibling.keys[last_key_idx]
+            borrowed_pointer = sibling.pointers[sibling.numKeys]  # last pointer
+            remove last key and pointer from sibling
+            
+            # Bring down K_sep from parent as first key in N
+            # Insert borrowed pointer as first pointer in N
+            insert K_sep as first key in N
+            insert borrowed_pointer as first pointer in N
+            
+            # Push up borrowed_key to parent as new separator
+            replace K_sep in P with borrowed_key
+    else:
+        # Borrow from right sibling
+        if N.isLeaf():
+            # Take the first entry from right sibling
+            borrowed_key = sibling.keys[0]
+            borrowed_data = sibling.dataPointers[0]
+            remove first entry from sibling
+            
+            # Insert borrowed entry as last entry in N
+            insert (borrowed_key, borrowed_data) as last entry in N
+            
+            # Update separator in parent to sibling's new first key
+            replace K_sep in P with sibling.keys[0]
+        else:
+            # Internal node: borrow first pointer and key from right sibling
+            borrowed_key = sibling.keys[0]
+            borrowed_pointer = sibling.pointers[0]
+            remove first key and pointer from sibling
+            
+            # Bring down K_sep from parent as last key in N
+            # Insert borrowed pointer as last pointer in N
+            insert K_sep as last key in N
+            insert borrowed_pointer as last pointer in N
+            
+            # Push up borrowed_key to parent as new separator
+            replace K_sep in P with borrowed_key
+
+
+def delete_entry(Node P, Key K, Node child_to_delete):
+    """Delete key K and pointer to child_to_delete from parent P"""
+    remove K from P
+    remove pointer to child_to_delete from P
 ```
 
 ## References
