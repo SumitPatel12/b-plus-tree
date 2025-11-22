@@ -19,18 +19,22 @@ enum class InsertResult { Success, Duplicate, Full };
 
 enum class DeletionResult { Success, KeyNotFound };
 
+template <typename KeyType, std::size_t N> struct FindResult {
+  BTreeLeafNode<KeyType, N>* leaf_node;
+  std::size_t idx;
+};
+
 struct InsertPosition {
   size_t index;
   bool is_duplicate;
 };
 
 // Information about a sibling node for deletion operations
-template <typename KeyType, std::size_t N>
-struct SiblingInfo {
-  BTreeNode<KeyType, N>* sibling;      // Pointer to the sibling node
-  KeyType separator_key;                // Key in parent separating node and sibling
-  std::size_t separator_index;          // Index of separator key in parent
-  bool is_left_sibling;                 // True if sibling is to the left of node
+template <typename KeyType, std::size_t N> struct SiblingInfo {
+  BTreeNode<KeyType, N>* sibling; // Pointer to the sibling node
+  KeyType separator_key;          // Key in parent separating node and sibling
+  std::size_t separator_index;    // Index of separator key in parent
+  bool is_left_sibling;           // True if sibling is to the left of node
 };
 
 // 4KB page data block, that the leaf_nodes points to.
@@ -66,7 +70,7 @@ public:
 template <typename DataType>
 InsertPosition find_index_greater_than_or_equal(std::span<const DataType> array, DataType value) {
   auto it = std::ranges::lower_bound(array, value);
-  
+
   size_t index = std::distance(array.begin(), it);
   bool is_duplicate = (it != array.end() && *it == value);
 

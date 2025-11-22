@@ -11,11 +11,13 @@ void run_demo() {
     std::cout << "Commands:" << std::endl;
     std::cout << "  i <key> - Insert a key" << std::endl;
     std::cout << "  d <key> - Delete a key" << std::endl;
+    std::cout << "  r <min> <max> - Find keys in range [min, max)" << std::endl;
     std::cout << "  q       - Quit" << std::endl;
     std::cout << "========================================" << std::endl;
 
     std::string command;
     int key;
+    int range_min, range_max;
     
     while (true) {
         std::cout << "\n> ";
@@ -63,11 +65,54 @@ void run_demo() {
             std::cout << "\nCurrent Tree State:" << std::endl;
             tree.print();
             
+        } else if (command == "r" || command == "range") {
+             if (!(std::cin >> range_min >> range_max)) {
+                std::cout << "Invalid range. Please enter two integers." << std::endl;
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                continue;
+            }
+
+            std::vector<int> keys = tree.find_keys_in_range(range_min, range_max);
+            std::cout << "Keys in range [" << range_min << ", " << range_max << "): ";
+            if (keys.empty()) {
+                std::cout << "None";
+            } else {
+                for (size_t i = 0; i < keys.size(); ++i) {
+                    std::cout << keys[i] << (i < keys.size() - 1 ? ", " : "");
+                }
+            }
+            std::cout << std::endl;
+
+            std::cout << "\nCurrent Tree State:" << std::endl;
+            tree.print();
+
         } else {
-            std::cout << "Unknown command. Use 'i <key>' to insert, 'd <key>' to delete, or 'q' to quit." << std::endl;
+            std::cout << "Unknown command. Use 'i <key>' to insert, 'd <key>' to delete, 'r <min> <max>' to find range, or 'q' to quit." << std::endl;
         }
     }
 }
+
+// Template metaprogramming to support dynamic order selection at runtime
+// We instantiate run_demo for a range of N values.
+template <std::size_t N>
+struct DemoRunner {
+    static void run(int n) {
+        if (n == N) {
+            run_demo<N>();
+        } else {
+            DemoRunner<N + 1>::run(n);
+        }
+    }
+};
+
+// Base case for recursion (stop at a reasonable max limit, e.g., 20)
+template <>
+struct DemoRunner<21> {
+    static void run(int n) {
+        std::cout << "Order " << n << " is too large for this demo (max 20)." << std::endl;
+    }
+};
 
 int main() {
     std::cout << "Enter B+ Tree Order (N): ";
@@ -77,19 +122,8 @@ int main() {
         return 1;
     }
 
-    // Use compile-time dispatch based on order
-    if (n == 3) {
-        run_demo<3>();
-    } else if (n == 4) {
-        run_demo<4>();
-    } else if (n == 5) {
-        run_demo<5>();
-    } else if (n == 6) {
-        run_demo<6>();
-    } else {
-        std::cout << "Order " << n << " not supported in this demo. Please use 3-6." << std::endl;
-        return 1;
-    }
+    // Dispatch to the appropriate template instantiation
+    DemoRunner<3>::run(n);
 
     std::cout << "\nExiting..." << std::endl;
     return 0;

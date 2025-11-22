@@ -12,9 +12,9 @@ void test_insert_empty_tree() {
     InsertResult result = tree.insert(10, nullptr);
     assert(result == InsertResult::Success);
     
-    auto* leaf = tree.find(10);
-    assert(leaf != nullptr);
-    assert(leaf->keys[0] == 10);
+    auto find_res = tree.find(10);
+    assert(find_res.leaf_node != nullptr);
+    assert(find_res.leaf_node->keys[find_res.idx] == 10);
     std::cout << "Passed!" << std::endl;
 }
 
@@ -25,8 +25,9 @@ void test_insert_multiple() {
     tree.insert(20, nullptr);
     tree.insert(5, nullptr); // Should be sorted
     
-    auto* leaf = tree.find(10);
-    assert(leaf != nullptr);
+    auto result = tree.find(10);
+    assert(result.leaf_node != nullptr);
+    auto* leaf = result.leaf_node;
     // Check order in leaf
     assert(leaf->keys[0] == 5);
     assert(leaf->keys[1] == 10);
@@ -47,13 +48,13 @@ void test_split_leaf() {
     // Verify split
     // We can't easily access root/structure from outside without friend or public API
     // But we can verify find works for all keys
-    assert(tree.find(10) != nullptr);
-    assert(tree.find(20) != nullptr);
-    assert(tree.find(30) != nullptr);
+    assert(tree.find(10).leaf_node != nullptr);
+    assert(tree.find(20).leaf_node != nullptr);
+    assert(tree.find(30).leaf_node != nullptr);
     
     // Verify they are in correct leaves (optional, if find works it's good indication)
-    auto* leaf1 = tree.find(10);
-    auto* leaf2 = tree.find(30);
+    auto leaf1 = tree.find(10).leaf_node;
+    auto leaf2 = tree.find(30).leaf_node;
     assert(leaf1 != leaf2); // Should be different nodes
     
     std::cout << "Passed!" << std::endl;
@@ -76,11 +77,11 @@ void test_split_internal() {
     // New Root: [30].
     tree.insert(50, nullptr);
     
-    assert(tree.find(10) != nullptr);
-    assert(tree.find(20) != nullptr);
-    assert(tree.find(30) != nullptr);
-    assert(tree.find(40) != nullptr);
-    assert(tree.find(50) != nullptr);
+    assert(tree.find(10).leaf_node != nullptr);
+    assert(tree.find(20).leaf_node != nullptr);
+    assert(tree.find(30).leaf_node != nullptr);
+    assert(tree.find(40).leaf_node != nullptr);
+    assert(tree.find(50).leaf_node != nullptr);
     
     tree.print();
 
